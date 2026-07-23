@@ -1,0 +1,143 @@
+from flask import Flask, jsonify, request
+import json
+
+app = Flask(__name__)
+
+DOSYA_ADI = "kullanicilar.json"
+
+# Tüm kullanıcıları getir
+@app.route("/users", methods=["GET"])
+def kullanicilari_getir():
+
+    with open(DOSYA_ADI, "r", encoding="utf-8") as f:
+        kullanicilar = json.load(f)
+
+    return jsonify(kullanicilar)
+
+
+# ID'ye göre kullanıcı getir
+@app.route("/users/<id>", methods=["GET"])
+def kullanici_getir1(id):
+
+    with open(DOSYA_ADI, "r", encoding="utf-8") as f:
+        kullanicilar = json.load(f)
+
+    if id in kullanicilar:
+        return jsonify(kullanicilar[id])
+
+    return jsonify({"hata": "Kullanıcı bulunamadı"}), 404
+
+
+# İsme göre kullanıcı getir
+@app.route("/users/isim/<kullaniciadi>", methods=["GET"])
+def kullanici_adi_getir(kullaniciadi):
+
+    with open(DOSYA_ADI, "r", encoding="utf-8") as f:
+        kullanicilar = json.load(f)
+
+    for kullanici in kullanicilar.values():
+        if kullanici["kullaniciadi"].lower() == kullaniciadi.lower():
+            return jsonify(kullanici)
+
+    return jsonify({"hata": "Kullanıcı bulunamadı"}), 404
+
+
+# Yeni kullanıcı ekle
+@app.route("/users", methods=["POST"])
+def kullanici_ekle():
+
+    veri = request.get_json()
+
+    if veri is None:
+        return jsonify({"hata": "JSON verisi gönderilmedi."}), 400
+
+    with open(DOSYA_ADI, "r", encoding="utf-8") as f:
+        kullanicilar = json.load(f)
+
+    yeni_id = str(len(kullanicilar) + 1)
+
+    kullanicilar[yeni_id] = {
+        "kullaniciadi": veri["isim"],
+        "sifre": veri["sifre"]
+    }
+
+    with open(DOSYA_ADI, "w", encoding="utf-8") as f:
+        json.dump(kullanicilar, f, ensure_ascii=False, indent=4)
+
+    return jsonify({
+        "mesaj": "Kullanıcı eklendi.",
+        "id": yeni_id
+    }), 201
+
+
+# ID'ye göre kullanıcı sil
+@app.route("/users/<id>", methods=["DELETE"])
+def kullanici_sil(id):
+
+    with open(DOSYA_ADI, "r", encoding="utf-8") as f:
+        kullanicilar = json.load(f)
+
+    if id not in kullanicilar:
+        return jsonify({"hata": "Kullanıcı bulunamadı"}), 404
+
+    silinen_kullanici = kullanicilar.pop(id)
+
+    with open(DOSYA_ADI, "w", encoding="utf-8") as f:
+        json.dump(kullanicilar, f, ensure_ascii=False, indent=4)
+
+    return jsonify({
+        "mesaj": "Kullanıcı silindi.",
+        "silinen_kullanici": silinen_kullanici
+    }), 200
+
+@app.route("/users/<id>", methods=["PUT"])
+def kullanici_guncelle(id):
+
+    # Gönderilen JSON verisini al
+    veri = request.get_json()
+
+    # Dosyayı oku
+    with open(DOSYA_ADI, "r", encoding="utf-8") as f:
+        kullanicilar = json.load(f)
+
+    # Kullanıcı var mı?
+    if id not in kullanicilar:
+        return jsonify({
+            "hata": "Kullanıcı bulunamadı."
+        }), 404
+
+    # Bilgileri güncelle
+    kullanicilar[id] = {
+        "kullaniciadi": veri["isim"],
+        "sifre": veri["sifre"]
+    }
+
+    # Dosyaya tekrar yaz
+    with open(DOSYA_ADI, "w", encoding="utf-8") as f:
+        json.dump(kullanicilar, f, ensure_ascii=False, indent=4)
+
+    return jsonify({
+        "mesaj": "Kullanıcı güncellendi."
+    }), 200
+
+@app.route("/users/<id>", methods=["PATCH"])
+def kullanici_patch(id):
+
+    veri = request.get_json()
+
+    with open(DOSYA_ADI, "r", encoding="utf-8") as f:
+        kullanicilar = json.load(f)
+
+    if id not in kullanicilar:
+        return jsonify({"hata": "Kullanıcı bulunamadı."}), 404
+
+    if "sifre" in veri:
+        kullanicilar[id]["sifre"] = veri["sifre"]
+
+    with open(DOSYA_ADI, "w", encoding="utf-8") as f:
+        json.dump(kullanicilar, f, ensure_ascii=False, indent=4)
+
+    return jsonify({"mesaj": "Kullanıcı güncellendi."}), 200
+
+if __name__ == "__main__":
+    app.run(debug=True)
