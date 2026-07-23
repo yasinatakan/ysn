@@ -1,0 +1,97 @@
+from flask import Flask, jsonify
+from pymodbus.client.sync import ModbusTcpClient
+import threading
+import json
+import time
+from datetime import datetime
+
+app = Flask(__name__)
+
+client = ModbusTcpClient("127.0.0.1", port=502)
+
+DOSYA_ADI = "veriler.json"
+
+
+veri = {
+    "sicaklik": 0,
+    "nem": 0,
+    "saniye": 0
+}
+
+
+def modbus_oku():
+    while True:
+
+        if client.connect():
+
+            sonuc = client.read_holding_registers(0, 3, unit=1)
+
+            if not sonuc.isError():
+
+                veri["sicaklik"] = sonuc.registers[0]
+                veri["nem"] = sonuc.registers[1]
+                veri["saniye"] = sonuc.registers[2]
+
+               
+                
+                kayit = {
+                    "zaman": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "sicaklik": veri["sicaklik"],
+                    "nem": veri["nem"],
+                    "saniye": veri["saniye"]
+                    }
+
+                with open(DOSYA_ADI, "a", encoding="utf-8") as f:
+                    json.dump(kayit, f, ensure_ascii=False)
+                    f.write("\n")
+
+                print("Veriler güncellendi:")
+                print(veri)
+
+            else:
+                print("Register okunamadı.")
+
+            client.close()
+
+        else:
+            print("Modbus Slave'e bağlanılamadı.")
+
+        time.sleep(1)
+
+
+@app.route("/veriler", methods=["GET"])
+def verileri_getir():
+    return jsonify(veri)
+
+@app.route("/veriler/sicaklik",methods=["GET"])
+def register1():
+    return jsonify({
+        "sicaklik": veri["sicaklik"]
+    })
+
+
+@app.route("/veriler/nem")
+def register2():
+    return jsonify({
+        "nem": veri["nem"]
+    })
+
+
+@app.route("/veriler/saniye")
+def register3():
+    return jsonify({
+        "saniye": veri["saniye"]
+    })
+
+
+if __name__ == "__main__":
+    thread = threading.Thread(target=modbus_oku)
+    thread.daemon = True
+    thread.start()
+
+    app.run(
+        host="127.0.0.1",
+        port=5000,
+        debug=True,
+        use_reloader=False
+    )
