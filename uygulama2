@@ -1,0 +1,96 @@
+from flask import Flask, request, jsonify
+from pymodbus.client.sync import ModbusTcpClient
+
+app = Flask(__name__)
+
+
+@app.route("/read", methods=["POST"])
+def veri_oku():
+
+    # Gönderilen JSON verisini al
+    veri = request.get_json()
+
+    # Gerekli alanlar
+    gerekli_alanlar = [
+        "ip",
+        "port",
+        "slave_id",
+        "register_type",
+        "register_address",
+        "count"
+    ]
+
+    # Alan kontrolü
+    for alan in gerekli_alanlar:
+        if alan not in veri:
+            return jsonify({
+                "status": "error",
+                "message": f"{alan} alanı eksik."
+            }), 400
+
+    # Şimdilik sadece Holding Register destekleniyor
+    if veri["register_type"].lower() != "holding":
+        return jsonify({
+            "status": "error",
+            "message": "Şimdilik sadece holding register desteklenmektedir."
+        }), 400
+
+    # Modbus bağlantısı oluştur
+    client = ModbusTcpClient(
+        host=veri["ip"],
+        port=veri["port"]
+    )
+
+    # Bağlantıyı kontrol et
+    if not client.connect():
+        return jsonify({
+            "status": "error",
+            "message": "PLC'ye bağlanılamadı."
+        }), 500
+
+    try:
+
+        # Holding Register oku
+        sonuc = client.read_holding_registers(
+            address=veri["register_address"],
+            count=veri["count"],
+            unit=veri["slave_id"]     # pymodbus 2.5.2
+        )
+
+        # Okuma hatası var mı?
+        if sonuc.isError():
+            return jsonify({
+                "status": "error",
+                "message": "Register okunamadı."
+            }), 500
+
+        # Başarılı cevap
+        if veri["count"] == 1:
+
+            return jsonify({
+                "status": "success",
+                "register": veri["register_address"],
+                "value": sonuc.registers[0]
+            })
+
+        else:
+
+            return jsonify({
+                "status": "success",
+                "register": veri["register_address"],
+                "values": sonuc.registers
+            })
+
+    except Exception as e:
+
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+    finally:
+        client.close()
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
